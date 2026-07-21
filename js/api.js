@@ -90,8 +90,12 @@ async function subscribeConversation(conversationId) {
         conversationId: row.conversation_id,
         senderId: row.sender_id,
         senderName: sender?.nickname || row.sender_id,
-        content: row.content,
-        createdAt: row.created_at
+        content: row.recalled ? '' : row.content,
+        createdAt: row.created_at,
+        msgType: row.msg_type || 'text',
+        meta: row.meta || {},
+        recalled: !!row.recalled,
+        reactions: []
       };
       if (!sender && row.sender_id) {
         const r = await api('/api/users/' + encodeURIComponent(row.sender_id));
@@ -242,12 +246,33 @@ async function updateGroupAvatar(conversationId, avatar) {
   });
 }
 
-async function sendMessage(conversationId, content) {
+async function sendMessage(conversationId, content, msgType = 'text', meta = {}) {
   const result = await api('/api/messages/send', {
     method: 'POST',
-    body: JSON.stringify({ conversationId, content })
+    body: JSON.stringify({ conversationId, content, msgType, meta })
   });
   return result;
+}
+
+async function recallMessageApi(messageId) {
+  return api('/api/messages/recall', {
+    method: 'POST',
+    body: JSON.stringify({ messageId })
+  });
+}
+
+async function reactMessageApi(messageId, emoji) {
+  return api('/api/messages/react', {
+    method: 'POST',
+    body: JSON.stringify({ messageId, emoji })
+  });
+}
+
+async function translateTextApi(text, targetLang) {
+  return api('/api/translate', {
+    method: 'POST',
+    body: JSON.stringify({ text, targetLang })
+  });
 }
 
 function joinConversation(conversationId) {

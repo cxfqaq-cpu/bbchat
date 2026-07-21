@@ -46,6 +46,8 @@ async function init() {
   bindNewFriendsPage();
   bindLanguage();
   bindChatRoom();
+  bindChatExtras();
+  bindMsgActions();
   bindSocketEvents();
 
   const user = await loadCurrentUser();
@@ -508,6 +510,44 @@ function closeChatRoom() {
   document.getElementById('mainHeader').classList.remove('hidden');
 }
 
+function messageBodyHtml(m) {
+  if (m.recalled) return `<div class="msg-bubble recalled">消息已撤回</div>`;
+  const type = m.msgType || 'text';
+  if (type === 'sticker' && m.meta?.sticker) {
+    return `<div class="msg-bubble sticker-bubble"><img src="${stickerUrl(m.meta.sticker)}" alt="sticker"></div>`;
+  }
+  if (type === 'voice' && m.meta?.audio) {
+    return `<div class="msg-bubble voice-bubble"><audio controls preload="metadata" src="${m.meta.audio}"></audio></div>`;
+  }
+  if ((type === 'location' || type === 'live_location') && m.meta?.lat != null) {
+    const label = type === 'live_location' ? '共享位置' : '位置';
+    const href = mapUrl(m.meta.lat, m.meta.lng);
+    return `<div class="msg-bubble loc-bubble"><a href="${href}" target="_blank" rel="noopener">${label}<br><small>${escapeHtml(m.meta.label || '')}</small></a></div>`;
+  }
+  return `<div class="msg-bubble">${escapeHtml(m.content)}</div>`;
+}
+
+function reactionsHtml(m) {
+  if (!m.reactions?.length) return '';
+  const counts = {};
+  m.reactions.forEach(r => { counts[r.emoji] = (counts[r.emoji] || 0) + 1; });
+  return `<div class="msg-reactions">${Object.entries(counts).map(([e, n]) => `<span>${e}${n > 1 ? n : ''}</span>`).join('')}</div>`;
+}
+
+function msgRowHtml(m, myId) {
+  const mine = m.senderId === myId || m.senderId === String(myId);
+  return `
+    <div class="msg-row ${mine ? 'mine' : 'theirs'}" data-msg-id="${escapeHtml(m.id)}">
+      ${!mine ? `<img class="msg-avatar" src="${LOGO}" alt="">` : ''}
+      <div class="msg-bubble-wrap">
+        ${!mine ? `<div class="msg-sender">${escapeHtml(m.senderName)}</div>` : ''}
+        ${messageBodyHtml(m)}
+        ${reactionsHtml(m)}
+        <div class="msg-time">${formatMsgTime(m.createdAt)}</div>
+      </div>
+    </div>`;
+}
+
 function renderMessages(messages) {
   const container = document.getElementById('chatMessages');
   const myId = getCurrentUserId();
@@ -517,18 +557,10 @@ function renderMessages(messages) {
     return;
   }
 
-  container.innerHTML = messages.map(m => {
-    const mine = m.senderId === myId;
-    return `
-      <div class="msg-row ${mine ? 'mine' : 'theirs'}">
-        ${!mine ? `<img class="msg-avatar" src="${LOGO}" alt="">` : ''}
-        <div class="msg-bubble-wrap">
-          ${!mine ? `<div class="msg-sender">${escapeHtml(m.senderName)}</div>` : ''}
-          <div class="msg-bubble">${escapeHtml(m.content)}</div>
-          <div class="msg-time">${formatMsgTime(m.createdAt)}</div>
-        </div>
-      </div>`;
-  }).join('');
+  container.innerHTML = messages.map(m => msgRowHtml(m, myId)).join('');
+  container.querySelectorAll('.msg-row').forEach((row, i) => {
+    row.addEventListener('click', () => openMsgActions(messages[i]));
+  });
 }
 
 function appendMessage(m) {
@@ -537,17 +569,11 @@ function appendMessage(m) {
   if (empty) container.innerHTML = '';
 
   const myId = getCurrentUserId();
-  const mine = m.senderId === myId;
-  const div = document.createElement('div');
-  div.className = 'msg-row ' + (mine ? 'mine' : 'theirs');
-  div.innerHTML = `
-    ${!mine ? `<img class="msg-avatar" src="${LOGO}" alt="">` : ''}
-    <div class="msg-bubble-wrap">
-      ${!mine ? `<div class="msg-sender">${escapeHtml(m.senderName)}</div>` : ''}
-      <div class="msg-bubble">${escapeHtml(m.content)}</div>
-      <div class="msg-time">${formatMsgTime(m.createdAt)}</div>
-    </div>`;
-  container.appendChild(div);
+  const wrap = document.createElement('div');
+  wrap.innerHTML = msgRowHtml(m, myId);
+  const row = wrap.firstElementChild;
+  row.addEventListener('click', () => openMsgActions(m));
+  container.appendChild(row);
   scrollMessagesToBottom();
 }
 

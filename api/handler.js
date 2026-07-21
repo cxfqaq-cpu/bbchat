@@ -37,8 +37,12 @@ function joinPath(parts) {
 
 async function requireUser(req, res) {
   const raw = getUserId(req);
-  const userId = raw ? db.normalizeUserId(raw) : '';
-  if (!userId || !(await db.getUser(userId))) {
+  if (!raw) {
+    res.status(401).json({ ok: false, error: '未登录' });
+    return null;
+  }
+  const userId = String(raw).trim() === '1' ? '1' : db.normalizeUserId(raw);
+  if (!(await db.getUser(userId))) {
     res.status(401).json({ ok: false, error: '未登录' });
     return null;
   }
@@ -196,14 +200,59 @@ async function route(req, res) {
     if (method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
     const userId = await requireUser(req, res);
     if (!userId) return;
-    const { conversationId, content } = req.body || {};
+    const { conversationId, content, msgType, meta } = req.body || {};
     if (!conversationId) return res.json({ ok: false, error: '缺少会话' });
     if (!(await db.isMember(conversationId, userId))) return res.status(403).json({ ok: false, error: '无权发送' });
     try {
-      const message = await db.insertMessage({ conversationId, senderId: userId, content });
+      const message = await db.insertMessage({
+        conversationId,
+        senderId: userId,
+        content,
+        msgType: msgType || 'text',
+        meta: meta || {}
+      });
       return res.json({ ok: true, message });
     } catch (e) {
       return res.json({ ok: false, error: e.message || '发送失败' });
+    }
+  }
+
+  // POST /api/messages/recall
+  if (path === 'messages/recall') {
+    if (method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+    const userId = await requireUser(req, res);
+    if (!userId) return;
+    const { messageId } = req.body || {};
+    if (!messageId) return res.json({ ok: false, error: '缺少消息 ID' });
+    return res.json(await db.recallMessage(userId, messageId));
+  }
+
+  // POST /api/messages/react
+  if (path === 'messages/react') {
+    if (method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+    const userId = await requireUser(req, res);
+    if (!userId) return;
+    const { messageId, emoji } = req.body || {};
+    if (!messageId || !emoji) return res.json({ ok: false, error: '参数不完整' });
+    return res.json(await db.reactToMessage(userId, messageId, emoji));
+  }
+
+  // POST /api/translate
+  if (path === 'translate') {
+    if (method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+    const userId = await requireUser(req, res);
+    if (!userId) return;
+    const { text, targetLang } = req.body || {};
+    if (!text) return res.json({ ok: false, error: '缺少文本' });
+    const lang = (targetLang || 'zh').slice(0, 8);
+    try {
+      const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(String(text).slice(0, 500)) + '&langpair=autodetect|' + encodeURIComponent(lang);
+      const r = await fetch(url);
+      const data = await r.json();
+      const translated = data?.responseData?.translatedText || '';
+      return res.json({ ok: true, translated, targetLang: lang });
+    } catch (e) {
+      return res.json({ ok: false, error: '翻译失败' });
     }
   }
 

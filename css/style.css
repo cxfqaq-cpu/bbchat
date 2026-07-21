@@ -1,17 +1,17 @@
 :root {
-  --wx-green: #0f766e;
-  --wx-blue: #475569;
-  --accent-blue: #0f766e;
-  --accent-cyan: #14b8a6;
-  --bg-page: #f1f5f9;
+  --wx-green: #07c160;
+  --wx-blue: #576b95;
+  --accent-blue: #07c160;
+  --accent-cyan: #25d366;
+  --bg-page: #ededed;
   --bg-card: #ffffff;
-  --text-primary: #0f172a;
-  --text-secondary: #64748b;
-  --border: #e2e8f0;
+  --text-primary: #111b21;
+  --text-secondary: #667781;
+  --border: #e9edef;
   --nav-height: 56px;
   --header-height: 48px;
   --font-ui: "Sora", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --font-display: "Instrument Serif", Georgia, serif;
+  --font-display: "Sora", "PingFang SC", sans-serif;
 }
 
 * {
@@ -185,7 +185,7 @@ html, body {
   width: 100%;
   padding: 14px;
   margin-top: 6px;
-  background: #0f172a;
+  background: #07c160;
   color: #fff;
   border: none;
   border-radius: 12px;
@@ -197,7 +197,7 @@ html, body {
 }
 
 .login-btn:hover {
-  background: #134e4a;
+  background: #06ad56;
 }
 
 .login-btn:active,
@@ -311,7 +311,7 @@ html, body {
 }
 
 .modal-btn-primary {
-  background: #0f172a;
+  background: #07c160;
   color: white;
 }
 
@@ -433,7 +433,7 @@ html, body {
 
 /* ===== Search Bar ===== */
 .search-bar {
-  padding: 8px 12px;
+  padding: 4px 10px;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   position: sticky;
@@ -444,15 +444,16 @@ html, body {
 .search-input-wrap {
   display: flex;
   align-items: center;
-  background: #f0f0f0;
-  border-radius: 6px;
-  padding: 8px 12px;
-  gap: 8px;
+  background: #f0f2f5;
+  border-radius: 8px;
+  padding: 4px 10px;
+  gap: 6px;
+  min-height: 32px;
 }
 
 .search-input-wrap svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   color: #999;
   flex-shrink: 0;
 }
@@ -462,7 +463,9 @@ html, body {
   border: none;
   background: transparent;
   outline: none;
-  font-size: 14px;
+  font-size: 13px;
+  padding: 4px 0;
+  margin: 0;
 }
 
 /* ===== List Items ===== */
