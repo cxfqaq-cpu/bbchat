@@ -238,7 +238,8 @@ function renderFriendRequestList() {
         if (result.ok) {
           await refreshAll();
           if (result.accepted && result.conversationId) {
-            alert(t('requestAccepted'));
+            closeNewFriendsPage();
+            await openChatRoom(result.conversationId);
           }
         } else {
           alert(result.error || 'Error');
@@ -303,10 +304,11 @@ async function confirmAddFriend() {
     if (result.ok) {
       closeAddFriendModal();
       await refreshAll();
-      alert(result.message || (result.autoAccepted ? t('friendAdded') : t('requestSent')));
       if (result.autoAccepted && result.conversationId) {
         closeNewFriendsPage();
-        openChatRoom(result.conversationId);
+        await openChatRoom(result.conversationId);
+      } else {
+        alert(result.message || t('requestSent'));
       }
     } else {
       errEl.textContent = result.error;
@@ -378,14 +380,14 @@ function renderFriends() {
   });
 }
 
-function openFriendChat(friendId) {
-  const conv = conversations.find(c =>
-    c.type === 'private' && (
-      c.id === `private_${[getCurrentUserId(), friendId].sort().join('_')}` ||
-      c.id === `private_${[String(getCurrentUserId()).toLowerCase(), String(friendId).toLowerCase()].sort().join('_')}`
-    )
-  );
-  if (conv) openChatRoom(conv.id);
+function privateConvIdClient(a, b) {
+  const norm = (id) => (String(id || '').trim() === '1' ? '1' : String(id || '').trim().toLowerCase());
+  return 'private_' + [norm(a), norm(b)].sort().join('_');
+}
+
+async function openFriendChat(friendId) {
+  const convId = privateConvIdClient(getCurrentUserId(), friendId);
+  await openChatRoom(convId);
 }
 
 /* ===== Chats ===== */
@@ -483,8 +485,23 @@ function bindChatRoom() {
 }
 
 async function openChatRoom(conversationId) {
-  const conv = conversations.find(c => c.id === conversationId);
-  if (!conv) return;
+  let conv = conversations.find(c => c.id === conversationId);
+  if (!conv) {
+    await loadConversations();
+    conv = conversations.find(c => c.id === conversationId);
+  }
+  if (!conv) {
+    // 刚加好友时会话可能尚未进本地列表，用占位打开
+    conv = {
+      id: conversationId,
+      type: 'private',
+      name: '聊天',
+      lastMessage: '',
+      lastTime: 0,
+      pinned: false
+    };
+    conversations.unshift(conv);
+  }
 
   activeConversation = conv;
   document.getElementById('chatRoomTitle').textContent = conv.name;
@@ -493,6 +510,7 @@ async function openChatRoom(conversationId) {
   document.getElementById('bottomNav').classList.add('hidden');
   document.getElementById('mainHeader').classList.add('hidden');
   document.getElementById('chatMessageInput').value = '';
+  closeChatPanels?.();
 
   joinConversation(conversationId);
   const messages = await fetchMessages(conversationId);

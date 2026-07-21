@@ -91,7 +91,8 @@ async function route(req, res) {
     if (await db.getUser(idCheck.id)) return res.json({ ok: false, error: '该账号已被注册，请换一个' });
     try {
       const user = await db.createUser({ id: idCheck.id, password, nickname });
-      return res.json({ ok: true, userId: user.id });
+      // 一次返回用户信息，前端可直接登录，避免再等一次 login
+      return res.json({ ok: true, userId: user.id, user: db.userPublic(user) });
     } catch (e) {
       if (e.code === 'ID_TAKEN') return res.json({ ok: false, error: '该账号已被注册，请换一个' });
       return res.json({ ok: false, error: e.message || '注册失败' });
@@ -306,7 +307,8 @@ async function route(req, res) {
   if (parts[0] === 'users' && parts[1] && !parts[2]) {
     const userId = await requireUser(req, res);
     if (!userId) return;
-    const id = db.normalizeUserId(decodeURIComponent(parts[1]));
+    const raw = decodeURIComponent(parts[1]);
+    const id = String(raw).trim() === '1' ? '1' : db.normalizeUserId(raw);
     const user = await db.getUser(id);
     if (!user) return res.json({ ok: false, error: '用户不存在' });
     return res.json({ ok: true, user: db.userPublic(user) });

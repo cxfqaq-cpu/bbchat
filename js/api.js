@@ -134,7 +134,12 @@ function onRealtimeConversation(handler) {
 }
 
 async function registerUser(data) {
-  return api('/api/register', { method: 'POST', body: JSON.stringify(data) });
+  const result = await api('/api/register', { method: 'POST', body: JSON.stringify(data) });
+  if (result.ok && result.user) {
+    setCurrentUserId(result.user.id);
+    currentUser = result.user;
+  }
+  return result;
 }
 
 async function loginUser(login, password) {
