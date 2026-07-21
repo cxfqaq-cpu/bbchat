@@ -165,9 +165,13 @@ async function previewAddFriend() {
 }
 
 async function confirmAddFriend() {
-  const targetId = document.getElementById('addFriendInput').value.trim();
+  const targetId = document.getElementById('addFriendInput').value.trim().toLowerCase();
   const errEl = document.getElementById('addFriendError');
   if (!targetId) { errEl.textContent = '请输入宝宝 ID'; return; }
+  if (targetId === String(getCurrentUserId() || '').toLowerCase()) {
+    errEl.textContent = '不能添加自己为好友';
+    return;
+  }
 
   const btn = document.getElementById('addFriendConfirm');
   btn.disabled = true;
@@ -227,7 +231,10 @@ function renderFriends() {
 
 function openFriendChat(friendId) {
   const conv = conversations.find(c =>
-    c.type === 'private' && c.id === `private_${[getCurrentUserId(), friendId].sort().join('_')}`
+    c.type === 'private' && (
+      c.id === `private_${[getCurrentUserId(), friendId].sort().join('_')}` ||
+      c.id === `private_${[String(getCurrentUserId()).toLowerCase(), String(friendId).toLowerCase()].sort().join('_')}`
+    )
   );
   if (conv) openChatRoom(conv.id);
 }

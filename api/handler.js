@@ -36,7 +36,8 @@ function joinPath(parts) {
 }
 
 async function requireUser(req, res) {
-  const userId = getUserId(req);
+  const raw = getUserId(req);
+  const userId = raw ? db.normalizeUserId(raw) : '';
   if (!userId || !(await db.getUser(userId))) {
     res.status(401).json({ ok: false, error: '未登录' });
     return null;
@@ -68,32 +69,39 @@ async function route(req, res) {
   if (path === 'login') {
     if (method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
     const { id, password } = req.body || {};
-    const user = await db.findUserByLogin(id || '');
-    if (!user) return res.json({ ok: false, error: '账号或邮箱不存在' });
+    if (!id || !password) return res.json({ ok: false, error: '请输入账号和密码' });
+    const user = await db.findUserByLogin(id);
+    if (!user) return res.json({ ok: false, error: '账号不存在' });
     if (user.password !== password) return res.json({ ok: false, error: '密码错误' });
     return res.json({ ok: true, user: db.userPublic(user) });
   }
 
-  // POST /api/register
+  // POST /api/register（已关闭邮箱验证，仅账号密码注册）
   if (path === 'register') {
     if (method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
-    const { id, password, nickname, email, code } = req.body || {};
-    if (!id || !password || !email || !code) return res.json({ ok: false, error: '请填写完整信息' });
-    if (!emailService.isValidEmail(email)) return res.json({ ok: false, error: '邮箱格式不正确' });
-    if (await db.getUser(id)) return res.json({ ok: false, error: '该账号已存在' });
-    if (await db.getUserByEmail(email)) return res.json({ ok: false, error: '该邮箱已被绑定' });
-    const verify = await emailService.verifyCode(email, code, 'register');
-    if (!verify.ok) return res.json(verify);
-    await db.createUser({ id, password, nickname: nickname || id, email: email.toLowerCase().trim() });
-    return res.json({ ok: true });
+    const { id, password, nickname } = req.body || {};
+    const idCheck = db.validateUserId(id);
+    if (!idCheck.ok) return res.json({ ok: false, error: idCheck.error });
+    const pwdCheck = db.validatePassword(password);
+    if (!pwdCheck.ok) return res.json({ ok: false, error: pwdCheck.error });
+    if (await db.getUser(idCheck.id)) return res.json({ ok: false, error: '该账号已被注册，请换一个' });
+    try {
+      const user = await db.createUser({ id: idCheck.id, password, nickname });
+      return res.json({ ok: true, userId: user.id });
+    } catch (e) {
+      if (e.code === 'ID_TAKEN') return res.json({ ok: false, error: '该账号已被注册，请换一个' });
+      return res.json({ ok: false, error: e.message || '注册失败' });
+    }
   }
 
   // POST /api/reset-password
   if (path === 'reset-password') {
     if (method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
     const { id, password } = req.body || {};
+    const pwdCheck = db.validatePassword(password);
+    if (!pwdCheck.ok) return res.json({ ok: false, error: pwdCheck.error });
     const user = await db.findUserByLogin(id || '');
-    if (!user) return res.json({ ok: false, error: '账号或邮箱不存在' });
+    if (!user) return res.json({ ok: false, error: '账号不存在' });
     await db.updateUser(user.id, { password });
     return res.json({ ok: true });
   }
@@ -106,9 +114,13 @@ async function route(req, res) {
       return res.json({ ok: true, user: db.userPublic(await db.getUser(userId)) });
     }
     if (method === 'PUT') {
-      const { email, ...safe } = req.body || {};
-      const updated = await db.updateUser(userId, safe);
-      return res.json({ ok: true, user: db.userPublic(updated) });
+      try {
+        const { email, id, ...safe } = req.body || {};
+        const updated = await db.updateUser(userId, safe);
+        return res.json({ ok: true, user: db.userPublic(updated) });
+      } catch (e) {
+        return res.json({ ok: false, error: e.message || '更新失败' });
+      }
     }
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
@@ -120,8 +132,8 @@ async function route(req, res) {
     if (method === 'GET') return res.json({ ok: true, friends: await db.getFriends(userId) });
     if (method === 'POST') {
       const { targetId } = req.body || {};
-      if (!targetId) return res.json({ ok: false, error: '请输入宝宝 ID' });
-      return res.json(await db.addFriend(userId, targetId.trim()));
+      if (!targetId || !String(targetId).trim()) return res.json({ ok: false, error: '请输入宝宝 ID' });
+      return res.json(await db.addFriend(userId, String(targetId).trim()));
     }
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
@@ -166,10 +178,14 @@ async function route(req, res) {
     const userId = await requireUser(req, res);
     if (!userId) return;
     const { conversationId, content } = req.body || {};
-    if (!conversationId || !content?.trim()) return res.json({ ok: false, error: '消息不能为空' });
+    if (!conversationId) return res.json({ ok: false, error: '缺少会话' });
     if (!(await db.isMember(conversationId, userId))) return res.status(403).json({ ok: false, error: '无权发送' });
-    const message = await db.insertMessage({ conversationId, senderId: userId, content: content.trim() });
-    return res.json({ ok: true, message });
+    try {
+      const message = await db.insertMessage({ conversationId, senderId: userId, content });
+      return res.json({ ok: true, message });
+    } catch (e) {
+      return res.json({ ok: false, error: e.message || '发送失败' });
+    }
   }
 
   // POST /api/email/send-code
@@ -177,12 +193,16 @@ async function route(req, res) {
     if (method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
     const { email, purpose } = req.body || {};
     if (!email) return res.json({ ok: false, error: '请输入邮箱' });
+    // 已关闭邮箱注册，仅允许登录后绑定邮箱
+    if (purpose === 'register') {
+      return res.json({ ok: false, error: '邮箱注册已关闭，请直接使用账号密码注册' });
+    }
     if (purpose === 'bind') {
       const userId = await requireUser(req, res);
       if (!userId) return;
       return res.json(await emailService.sendVerificationCode(db, email, 'bind', userId));
     }
-    return res.json(await emailService.sendVerificationCode(db, email, 'register'));
+    return res.json({ ok: false, error: '不支持的验证码用途' });
   }
 
   // POST /api/email/verify-code
@@ -190,12 +210,15 @@ async function route(req, res) {
     if (method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
     const { email, code, purpose } = req.body || {};
     if (!email || !code) return res.json({ ok: false, error: '请输入邮箱和验证码' });
+    if (purpose === 'register') {
+      return res.json({ ok: false, error: '邮箱注册已关闭' });
+    }
     if (purpose === 'bind') {
       const userId = getUserId(req);
       if (!userId) return res.status(401).json({ ok: false, error: '未登录' });
       return res.json(await emailService.checkCode(email, code, 'bind', userId));
     }
-    return res.json(await emailService.checkCode(email, code, 'register'));
+    return res.json({ ok: false, error: '不支持的验证码用途' });
   }
 
   // POST /api/email/bind
@@ -215,7 +238,7 @@ async function route(req, res) {
   if (parts[0] === 'users' && parts[1] && !parts[2]) {
     const userId = await requireUser(req, res);
     if (!userId) return;
-    const id = decodeURIComponent(parts[1]);
+    const id = db.normalizeUserId(decodeURIComponent(parts[1]));
     const user = await db.getUser(id);
     if (!user) return res.json({ ok: false, error: '用户不存在' });
     return res.json({ ok: true, user: db.userPublic(user) });
