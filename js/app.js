@@ -2,7 +2,7 @@
  * bbchat - 主应用
  */
 
-const LOGO = 'assets/logo.png';
+const LOGO = 'assets/logo.svg';
 
 let currentTab = 'chat';
 let contextTarget = null;

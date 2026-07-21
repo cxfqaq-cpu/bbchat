@@ -4,7 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>bbchat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/pinyin-pro@3.19.6/dist/index.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
@@ -57,7 +61,7 @@
     <!-- 自己 -->
     <div class="app-content hidden" id="panelMe" data-panel="me">
       <div class="profile-header" id="profileHeader">
-        <img src="assets/logo.png" alt="头像" class="profile-avatar" id="meAvatar">
+        <img src="assets/logo.svg" alt="头像" class="profile-avatar" id="meAvatar">
         <div class="profile-info">
           <div class="profile-name-row">
             <span class="profile-id" id="meId">宝宝</span>
@@ -113,7 +117,7 @@
       <div class="app-content">
         <div class="detail-row" id="detailAvatarRow">
           <span class="detail-label" data-i18n="avatar">头像</span>
-          <span class="detail-value"><img src="assets/logo.png" id="detailAvatar" alt="头像"></span>
+          <span class="detail-value"><img src="assets/logo.svg" id="detailAvatar" alt="头像"></span>
           <span class="detail-arrow">›</span>
         </div>
         <div class="detail-row" data-field="nickname"><span class="detail-label" data-i18n="nickname">昵称</span><span class="detail-value" id="detailNickname">宝宝</span><span class="detail-arrow">›</span></div>
