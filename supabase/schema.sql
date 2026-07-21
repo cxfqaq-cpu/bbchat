@@ -57,8 +57,23 @@ CREATE TABLE IF NOT EXISTS verification_codes (
   sent_at BIGINT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS friend_requests (
+  id TEXT PRIMARY KEY,
+  from_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
+  created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)::BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS idx_friend_requests_to ON friend_requests (to_id, status);
+CREATE INDEX IF NOT EXISTS idx_friend_requests_from ON friend_requests (from_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_friend_requests_pending_pair
+  ON friend_requests (from_id, to_id)
+  WHERE status = 'pending';
+
 -- 请在 Supabase Dashboard -> Database -> Publications 中
 -- 确认 supabase_realtime 已包含 messages 和 conversations 表
+-- 建议也将 friend_requests 加入 Realtime
 
 -- 演示账号（密码: 123456）
 INSERT INTO users (id, password, nickname, gender, email, email_verified, favorite_games)

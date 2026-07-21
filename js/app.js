@@ -1,9 +1,8 @@
 /**
- * bbchat - 主应用（API + Socket.io 实时通信）
+ * bbchat - 主应用
  */
 
 const LOGO = 'assets/logo.png';
-const TITLES = { friends: '好友', chat: '聊天', groups: '群组', me: '我' };
 
 let currentTab = 'chat';
 let contextTarget = null;
@@ -11,12 +10,19 @@ let editField = null;
 let pendingGroupId = null;
 let conversations = [];
 let friends = [];
+let friendRequests = [];
+let pendingRequestCount = 0;
 let activeConversation = null;
 let messageHandler = null;
 let convUpdateHandler = null;
 let friendsUpdateHandler = null;
+let requestPollTimer = null;
 
 const GENDER_ITEM_HEIGHT = 44;
+
+function tabTitles() {
+  return { friends: t('friends'), chat: t('chat'), groups: t('groups'), me: t('me') };
+}
 
 async function init() {
   const userId = getCurrentUserId();
@@ -24,6 +30,10 @@ async function init() {
     window.location.href = 'index.html';
     return;
   }
+
+  setLang(getLang());
+  applyI18n();
+  updateLanguageLabel();
 
   bindNavigation();
   bindProfile();
@@ -33,6 +43,8 @@ async function init() {
   bindGenderPicker();
   bindEmailBind();
   bindAddFriend();
+  bindNewFriendsPage();
+  bindLanguage();
   bindChatRoom();
   bindSocketEvents();
 
@@ -44,6 +56,7 @@ async function init() {
 
   await refreshAll();
   updateHeaderActions();
+  startRequestPolling();
 }
 
 function avatarSrc(avatar) {
@@ -54,22 +67,26 @@ function formatTime(ts) {
   if (!ts) return '';
   const d = new Date(ts);
   const now = new Date();
+  const locale = getLang() === 'zh' ? 'zh-CN' : getLang() === 'vi' ? 'vi-VN' : 'en-US';
   if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   }
-  return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+  return d.toLocaleDateString(locale, { month: 'numeric', day: 'numeric' });
 }
 
 function formatMsgTime(ts) {
-  return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  const locale = getLang() === 'zh' ? 'zh-CN' : getLang() === 'vi' ? 'vi-VN' : 'en-US';
+  return new Date(ts).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
 async function refreshAll() {
   renderMe();
-  await Promise.all([loadFriends(), loadConversations()]);
+  await Promise.all([loadFriends(), loadConversations(), loadFriendRequests()]);
   renderFriends();
   renderChats();
   renderGroups();
+  renderFriendRequestBadges();
+  renderFriendRequestList();
 }
 
 async function loadFriends() {
@@ -78,6 +95,25 @@ async function loadFriends() {
 
 async function loadConversations() {
   conversations = await fetchConversations();
+}
+
+async function loadFriendRequests() {
+  const result = await fetchFriendRequests();
+  friendRequests = result.requests || [];
+  pendingRequestCount = result.count || 0;
+}
+
+function startRequestPolling() {
+  clearInterval(requestPollTimer);
+  requestPollTimer = setInterval(async () => {
+    try {
+      await loadFriendRequests();
+      renderFriendRequestBadges();
+      if (document.getElementById('newFriendsPage').classList.contains('active')) {
+        renderFriendRequestList();
+      }
+    } catch (_) {}
+  }, 15000);
 }
 
 function getPrivateChats() {
@@ -93,6 +129,11 @@ function updateHeaderActions() {
   btn.classList.toggle('hidden', currentTab !== 'chat' && currentTab !== 'friends');
 }
 
+function updateLanguageLabel() {
+  const el = document.getElementById('menuLanguageValue');
+  if (el) el.textContent = t('langName');
+}
+
 /* ===== Navigation ===== */
 function bindNavigation() {
   document.querySelectorAll('.nav-item').forEach(btn => {
@@ -100,7 +141,7 @@ function bindNavigation() {
   });
 }
 
-function switchTab(tab) {
+async function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.nav-item').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === tab);
@@ -108,22 +149,102 @@ function switchTab(tab) {
   document.querySelectorAll('[data-panel]').forEach(p => {
     p.classList.toggle('hidden', p.dataset.panel !== tab);
   });
-  document.getElementById('headerTitle').textContent = TITLES[tab];
+  document.getElementById('headerTitle').textContent = tabTitles()[tab];
   document.getElementById('bottomNav').classList.remove('hidden');
   document.getElementById('mainHeader').classList.remove('hidden');
   updateHeaderActions();
+  if (tab === 'friends') {
+    await loadFriendRequests();
+    renderFriendRequestBadges();
+  }
 }
 
-/* ===== Add Friend ===== */
+/* ===== Add Friend / New Friends ===== */
 function bindAddFriend() {
-  const open = () => openAddFriendModal();
-  document.getElementById('headerAddFriend').addEventListener('click', open);
-  document.getElementById('newFriendBanner').addEventListener('click', open);
-
+  document.getElementById('headerAddFriend').addEventListener('click', openAddFriendModal);
   document.getElementById('addFriendCancel').addEventListener('click', closeAddFriendModal);
   document.getElementById('addFriendConfirm').addEventListener('click', confirmAddFriend);
-
   document.getElementById('addFriendInput').addEventListener('input', debounce(previewAddFriend, 400));
+}
+
+function bindNewFriendsPage() {
+  document.getElementById('newFriendBanner').addEventListener('click', openNewFriendsPage);
+  document.getElementById('newFriendsBack').addEventListener('click', closeNewFriendsPage);
+  document.getElementById('openAddByIdBtn').addEventListener('click', openAddFriendModal);
+}
+
+function openNewFriendsPage() {
+  document.getElementById('newFriendsPage').classList.add('active');
+  document.getElementById('bottomNav').classList.add('hidden');
+  document.getElementById('mainHeader').classList.add('hidden');
+  loadFriendRequests().then(() => {
+    renderFriendRequestBadges();
+    renderFriendRequestList();
+  });
+}
+
+function closeNewFriendsPage() {
+  document.getElementById('newFriendsPage').classList.remove('active');
+  document.getElementById('bottomNav').classList.remove('hidden');
+  document.getElementById('mainHeader').classList.remove('hidden');
+}
+
+function renderFriendRequestBadges() {
+  const n = pendingRequestCount || 0;
+  const text = n > 99 ? '99+' : String(n);
+
+  const bannerBadge = document.getElementById('newFriendBadge');
+  if (bannerBadge) {
+    bannerBadge.textContent = text;
+    bannerBadge.classList.toggle('hidden', n <= 0);
+  }
+
+  const navBadge = document.getElementById('friendsNavBadge');
+  if (navBadge) {
+    navBadge.textContent = text;
+    navBadge.classList.toggle('hidden', n <= 0);
+  }
+}
+
+function renderFriendRequestList() {
+  const box = document.getElementById('friendRequestList');
+  if (!box) return;
+  if (!friendRequests.length) {
+    box.innerHTML = `<div class="empty-state">${escapeHtml(t('noPending'))}</div>`;
+    return;
+  }
+  box.innerHTML = friendRequests.map(r => `
+    <div class="request-item" data-request-id="${escapeHtml(r.id)}">
+      <img class="list-avatar round" src="${avatarSrc(r.avatar)}" alt="">
+      <div class="list-body">
+        <div class="list-name">${escapeHtml(r.nickname)}</div>
+        <div class="list-preview">ID: ${escapeHtml(r.fromId)}</div>
+      </div>
+      <div class="request-actions">
+        <button class="req-btn req-accept" data-action="accept">${escapeHtml(t('accept'))}</button>
+        <button class="req-btn req-reject" data-action="reject">${escapeHtml(t('reject'))}</button>
+      </div>
+    </div>
+  `).join('');
+
+  box.querySelectorAll('.request-item').forEach(row => {
+    row.querySelectorAll('button[data-action]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const action = btn.dataset.action;
+        const result = await respondFriendRequest(row.dataset.requestId, action);
+        if (result.ok) {
+          await refreshAll();
+          if (result.accepted && result.conversationId) {
+            alert(t('requestAccepted'));
+          }
+        } else {
+          alert(result.error || 'Error');
+          btn.disabled = false;
+        }
+      });
+    });
+  });
 }
 
 function openAddFriendModal() {
@@ -142,7 +263,7 @@ async function previewAddFriend() {
   const id = document.getElementById('addFriendInput').value.trim();
   const preview = document.getElementById('addFriendPreview');
   if (!id) { preview.classList.add('hidden'); return; }
-  if (id === getCurrentUserId()) {
+  if (id.toLowerCase() === String(getCurrentUserId() || '').toLowerCase()) {
     preview.classList.remove('hidden');
     preview.innerHTML = '<span class="preview-hint">不能添加自己</span>';
     return;
@@ -167,7 +288,7 @@ async function previewAddFriend() {
 async function confirmAddFriend() {
   const targetId = document.getElementById('addFriendInput').value.trim().toLowerCase();
   const errEl = document.getElementById('addFriendError');
-  if (!targetId) { errEl.textContent = '请输入宝宝 ID'; return; }
+  if (!targetId) { errEl.textContent = t('babyId'); return; }
   if (targetId === String(getCurrentUserId() || '').toLowerCase()) {
     errEl.textContent = '不能添加自己为好友';
     return;
@@ -175,12 +296,16 @@ async function confirmAddFriend() {
 
   const btn = document.getElementById('addFriendConfirm');
   btn.disabled = true;
-  btn.textContent = '添加中...';
   try {
     const result = await addFriendById(targetId);
     if (result.ok) {
       closeAddFriendModal();
       await refreshAll();
+      alert(result.message || (result.autoAccepted ? t('friendAdded') : t('requestSent')));
+      if (result.autoAccepted && result.conversationId) {
+        closeNewFriendsPage();
+        openChatRoom(result.conversationId);
+      }
     } else {
       errEl.textContent = result.error;
     }
@@ -188,8 +313,30 @@ async function confirmAddFriend() {
     errEl.textContent = '添加失败，请检查网络';
   } finally {
     btn.disabled = false;
-    btn.textContent = '添加';
+    btn.textContent = t('sendRequest');
   }
+}
+
+function bindLanguage() {
+  document.getElementById('menuLanguage').addEventListener('click', () => {
+    document.getElementById('languageModal').classList.remove('hidden');
+  });
+  document.getElementById('languageCancel').addEventListener('click', () => {
+    document.getElementById('languageModal').classList.add('hidden');
+  });
+  document.querySelectorAll('.lang-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      setLang(opt.dataset.lang);
+      applyI18n();
+      updateLanguageLabel();
+      document.getElementById('headerTitle').textContent = tabTitles()[currentTab];
+      document.getElementById('languageModal').classList.add('hidden');
+      renderFriends();
+      renderFriendRequestList();
+      renderFriendRequestBadges();
+      renderMe();
+    });
+  });
 }
 
 /* ===== Friends ===== */
@@ -199,7 +346,7 @@ function renderFriends() {
   const { groups, letters } = groupByLetter(friends, 'name');
 
   if (letters.length === 0) {
-    container.innerHTML = '<div class="empty-state">暂无好友<br><span class="empty-hint">点击上方「新的朋友」添加</span></div>';
+    container.innerHTML = `<div class="empty-state">${escapeHtml(t('noFriends'))}<br><span class="empty-hint">${escapeHtml(t('noFriendsHint'))}</span></div>`;
     indexEl.innerHTML = '';
     return;
   }

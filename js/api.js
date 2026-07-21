@@ -209,6 +209,18 @@ async function addFriendById(targetId) {
   });
 }
 
+async function fetchFriendRequests() {
+  const result = await api('/api/friend-requests');
+  return result.ok ? result : { ok: false, requests: [], count: 0 };
+}
+
+async function respondFriendRequest(requestId, action) {
+  return api('/api/friend-requests', {
+    method: 'POST',
+    body: JSON.stringify({ requestId, action })
+  });
+}
+
 async function fetchConversations() {
   const result = await api('/api/conversations');
   return result.ok ? result.conversations : [];

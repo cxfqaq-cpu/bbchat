@@ -133,7 +133,26 @@ async function route(req, res) {
     if (method === 'POST') {
       const { targetId } = req.body || {};
       if (!targetId || !String(targetId).trim()) return res.json({ ok: false, error: '请输入宝宝 ID' });
-      return res.json(await db.addFriend(userId, String(targetId).trim()));
+      return res.json(await db.sendFriendRequest(userId, String(targetId).trim()));
+    }
+    return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  }
+
+  // GET /api/friend-requests  |  POST accept/reject
+  if (path === 'friend-requests') {
+    const userId = await requireUser(req, res);
+    if (!userId) return;
+    if (method === 'GET') {
+      const [requests, count] = await Promise.all([
+        db.getPendingFriendRequests(userId),
+        db.countPendingFriendRequests(userId)
+      ]);
+      return res.json({ ok: true, requests, count });
+    }
+    if (method === 'POST') {
+      const { requestId, action } = req.body || {};
+      if (!requestId || !action) return res.json({ ok: false, error: '参数不完整' });
+      return res.json(await db.respondFriendRequest(userId, requestId, action));
     }
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
