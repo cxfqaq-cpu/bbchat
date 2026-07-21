@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>bbchat</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/pinyin-pro@3.19.6/dist/index.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+</head>
+<body>
+  <div class="app-shell" id="appShell">
+    <header class="app-header" id="mainHeader">
+      <span class="app-header-title" id="headerTitle">聊天</span>
+      <button class="header-action hidden" id="headerAddFriend" title="添加好友">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+      </button>
+    </header>
+
+    <!-- 好友 -->
+    <div class="app-content hidden" id="panelFriends" data-panel="friends">
+      <div class="new-friend-banner" id="newFriendBanner">
+        <div class="new-friend-icon">👋</div>
+        <div class="new-friend-text">
+          <div class="new-friend-title">新的朋友</div>
+          <div class="new-friend-sub">通过宝宝 ID 添加好友</div>
+        </div>
+        <span class="new-friend-arrow">›</span>
+      </div>
+      <div id="friendsList"></div>
+      <div class="index-sidebar" id="friendsIndex"></div>
+    </div>
+
+    <!-- 聊天 -->
+    <div class="app-content" id="panelChat" data-panel="chat">
+      <div class="search-bar">
+        <div class="search-input-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="search" id="chatSearch" class="soft-input" placeholder="搜索聊天记录">
+        </div>
+      </div>
+      <div id="chatList"></div>
+    </div>
+
+    <!-- 群组 -->
+    <div class="app-content hidden" id="panelGroups" data-panel="groups">
+      <div class="search-bar">
+        <div class="search-input-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="search" id="groupSearch" class="soft-input" placeholder="搜索群组">
+        </div>
+      </div>
+      <div id="groupList"></div>
+    </div>
+
+    <!-- 自己 -->
+    <div class="app-content hidden" id="panelMe" data-panel="me">
+      <div class="profile-header" id="profileHeader">
+        <img src="assets/logo.png" alt="头像" class="profile-avatar" id="meAvatar">
+        <div class="profile-info">
+          <div class="profile-name-row">
+            <span class="profile-id" id="meId">宝宝</span>
+            <svg class="profile-qr" id="meQrBtn" viewBox="0 0 24 24" fill="currentColor" title="我的二维码">
+              <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v2h-3v-2zm0 4h3v2h-3v-2zm-3-4h2v8h-2v-8zm3 4h3v2h-3v-2z"/>
+            </svg>
+          </div>
+          <div class="profile-sub-id" id="meSubId">ID: demo</div>
+        </div>
+        <span class="profile-arrow">›</span>
+      </div>
+      <div class="menu-group">
+        <div class="menu-item" id="menuLogout">
+          <span class="menu-icon">🚪</span>
+          <span class="menu-label">退出登录</span>
+          <span class="menu-arrow">›</span>
+        </div>
+      </div>
+    </div>
+
+    <nav class="bottom-nav" id="bottomNav">
+      <button class="nav-item" data-tab="friends"><div class="nav-item-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>好友</span></div></button>
+      <button class="nav-item active" data-tab="chat"><div class="nav-item-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>聊天</span></div></button>
+      <button class="nav-item" data-tab="groups"><div class="nav-item-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>群组</span></div></button>
+      <button class="nav-item" data-tab="me"><div class="nav-item-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>自己</span></div></button>
+    </nav>
+
+    <!-- 聊天对话页 -->
+    <div class="sub-page" id="chatRoomPage">
+      <header class="app-header">
+        <button class="app-header-back" id="chatRoomBack">‹</button>
+        <span class="app-header-title" id="chatRoomTitle">聊天</span>
+      </header>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-bar">
+        <input type="text" id="chatMessageInput" class="chat-input soft-input" placeholder="输入消息..." autocomplete="off">
+        <button type="button" id="chatSendBtn" class="chat-send-btn">发送</button>
+      </div>
+    </div>
+
+    <!-- 详细资料页 -->
+    <div class="sub-page" id="detailPage">
+      <header class="app-header">
+        <button class="app-header-back" id="detailBack">‹</button>
+        <span class="app-header-title">个人资料</span>
+      </header>
+      <div class="app-content">
+        <div class="detail-row" id="detailAvatarRow">
+          <span class="detail-label">头像</span>
+          <span class="detail-value"><img src="assets/logo.png" id="detailAvatar" alt="头像"></span>
+          <span class="detail-arrow">›</span>
+        </div>
+        <div class="detail-row" data-field="nickname"><span class="detail-label">昵称</span><span class="detail-value" id="detailNickname">宝宝</span><span class="detail-arrow">›</span></div>
+        <div class="detail-row" data-field="gender"><span class="detail-label">性别</span><span class="detail-value" id="detailGender">未填写</span><span class="detail-arrow">›</span></div>
+        <div class="detail-row" id="detailEmailRow" data-action="bind-email">
+          <span class="detail-label">邮箱号</span>
+          <span class="detail-value" id="detailEmail">未绑定</span>
+          <span class="detail-arrow">›</span>
+        </div>
+        <div class="detail-row" data-field="favoriteGames"><span class="detail-label">爱玩的游戏</span><span class="detail-value" id="detailGames">未填写</span><span class="detail-arrow">›</span></div>
+        <div class="detail-spacer"></div>
+        <div class="detail-row"><span class="detail-label">宝宝ID</span><span class="detail-value" id="detailId">demo</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="context-menu hidden" id="contextMenu">
+    <div class="context-menu-item" id="ctxPin">置顶</div>
+    <div class="context-menu-item" id="ctxUnpin">取消置顶</div>
+    <div class="context-menu-item hidden" id="ctxAvatar">修改群头像</div>
+  </div>
+
+  <div id="addFriendModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2 class="modal-title">添加好友</h2>
+      <p class="modal-subtitle">输入对方的宝宝 ID</p>
+      <input type="text" id="addFriendInput" class="soft-input login-input" placeholder="宝宝 ID">
+      <div id="addFriendPreview" class="add-friend-preview hidden"></div>
+      <p id="addFriendError" class="login-error"></p>
+      <div class="modal-actions">
+        <button type="button" id="addFriendCancel" class="modal-btn modal-btn-secondary">取消</button>
+        <button type="button" id="addFriendConfirm" class="modal-btn modal-btn-primary">添加</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="qrModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2 class="modal-title">我的二维码</h2>
+      <div class="qr-display" id="qrContainer"></div>
+      <div class="modal-actions"><button type="button" id="qrClose" class="modal-btn modal-btn-secondary" style="flex:1">关闭</button></div>
+    </div>
+  </div>
+
+  <div id="bindEmailModal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-wide">
+      <h2 class="modal-title">绑定邮箱</h2>
+      <p class="modal-subtitle">绑定后可使用邮箱登录，验证码 3 分钟内有效</p>
+      <input type="email" id="bindEmailInput" class="soft-input login-input" placeholder="请输入邮箱号">
+      <button type="button" id="bindSendCode" class="modal-btn modal-btn-primary pressable full-width-btn">发送验证码</button>
+      <p id="bindEmailHint" class="code-hint"></p>
+      <div class="step-label">输入 6 位验证码</div>
+      <div id="bindCodeBoxes" class="code-boxes"></div>
+      <button type="button" id="bindVerifyCode" class="modal-btn modal-btn-secondary pressable full-width-btn">验证验证码</button>
+      <p id="bindVerifyStatus" class="verify-status"></p>
+      <p id="bindEmailError" class="login-error"></p>
+      <div class="modal-actions">
+        <button type="button" id="bindEmailCancel" class="modal-btn modal-btn-secondary pressable">取消</button>
+        <button type="button" id="bindEmailConfirm" class="modal-btn modal-btn-primary pressable" disabled>确认绑定</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2 class="modal-title" id="editTitle">编辑</h2>
+      <input type="text" id="editInput" class="soft-input login-input">
+      <div id="genderPicker" class="gender-picker hidden">
+        <div class="gender-picker-frame"></div>
+        <div class="gender-picker-scroll" id="genderPickerScroll">
+          <div class="gender-picker-spacer"></div>
+          <div class="gender-picker-item" data-gender="男">男</div>
+          <div class="gender-picker-item" data-gender="女">女</div>
+          <div class="gender-picker-spacer"></div>
+        </div>
+      </div>
+      <p id="editError" class="login-error"></p>
+      <div class="modal-actions">
+        <button type="button" id="editCancel" class="modal-btn modal-btn-secondary">取消</button>
+        <button type="button" id="editConfirm" class="modal-btn modal-btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="avatarInput" accept="image/*" class="hidden">
+  <input type="file" id="groupAvatarInput" accept="image/*" class="hidden">
+
+  <script src="js/code-input.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/sort.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

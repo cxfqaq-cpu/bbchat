@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>bbchat - 登录</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-bg"></div>
+    <div class="login-card">
+      <img src="assets/logo.png" alt="Logo" class="login-logo">
+      <h1 class="login-title">bbchat</h1>
+      <p class="login-subtitle">连接校园，畅聊每一刻</p>
+      <input type="text" id="username" class="soft-input login-input" placeholder="账号 / 邮箱" autocomplete="username">
+      <input type="password" id="password" class="soft-input login-input" placeholder="密码" autocomplete="current-password">
+      <button type="button" id="loginBtn" class="login-btn pressable">登 录</button>
+      <p id="loginError" class="login-error"></p>
+      <div class="login-footer">
+        <a id="registerLink">注册</a>
+        <a id="forgotLink">忘记密码</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="registerModal" class="modal-overlay hidden">
+    <div class="modal-box modal-box-wide">
+      <h2 class="modal-title">注册 bbchat 账号</h2>
+
+      <div class="step-label">第一步 · 验证邮箱</div>
+      <input type="email" id="regEmail" class="soft-input login-input" placeholder="请输入邮箱号" autocomplete="email">
+      <button type="button" id="regSendCode" class="modal-btn modal-btn-primary pressable full-width-btn">发送验证码</button>
+      <p id="regCodeHint" class="code-hint"></p>
+
+      <div class="step-label">输入 6 位验证码</div>
+      <div id="regCodeBoxes" class="code-boxes"></div>
+      <button type="button" id="regVerifyCode" class="modal-btn modal-btn-secondary pressable full-width-btn">验证验证码</button>
+      <p id="regVerifyStatus" class="verify-status"></p>
+
+      <div id="regStep2" class="hidden">
+        <div class="step-label step-divider">第二步 · 填写账号信息</div>
+        <input type="text" id="regId" class="soft-input login-input" placeholder="账号（英文/数字）">
+        <input type="text" id="regNickname" class="soft-input login-input" placeholder="昵称">
+        <input type="password" id="regPassword" class="soft-input login-input" placeholder="密码">
+        <input type="password" id="regPassword2" class="soft-input login-input" placeholder="确认密码">
+        <button type="button" id="regConfirm" class="login-btn pressable">完成注册</button>
+      </div>
+
+      <p id="regError" class="login-error"></p>
+      <div class="modal-actions">
+        <button type="button" id="regCancel" class="modal-btn modal-btn-secondary pressable" style="flex:1">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="forgotModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2 class="modal-title">重置密码</h2>
+      <input type="text" id="forgotId" class="soft-input login-input" placeholder="账号 / 邮箱">
+      <input type="password" id="forgotPassword" class="soft-input login-input" placeholder="新密码">
+      <input type="password" id="forgotPassword2" class="soft-input login-input" placeholder="确认新密码">
+      <p id="forgotError" class="login-error"></p>
+      <div class="modal-actions">
+        <button type="button" id="forgotCancel" class="modal-btn modal-btn-secondary pressable">取消</button>
+        <button type="button" id="forgotConfirm" class="modal-btn modal-btn-primary pressable">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/code-input.js"></script>
+  <script src="js/api.js"></script>
+  <script>
+    (async () => {
+      try { await ensureDemoAccount(); } catch (_) {}
+
+      let regVerified = false;
+      let regVerifiedEmail = '';
+      let regSendTimer = null;
+
+      const usernameEl = document.getElementById('username');
+      const passwordEl = document.getElementById('password');
+      const loginBtn = document.getElementById('loginBtn');
+      const loginError = document.getElementById('loginError');
+
+      async function doLogin() {
+        const login = usernameEl.value.trim();
+        const pwd = passwordEl.value;
+        if (!login || !pwd) { loginError.textContent = '请输入账号/邮箱和密码'; return; }
+        loginBtn.disabled = true;
+        loginBtn.textContent = '登录中...';
+        try {
+          const result = await loginUser(login, pwd);
+          if (result.ok) window.location.href = 'app.html';
+          else loginError.textContent = result.error || '登录失败';
+        } catch (e) {
+          loginError.textContent = '无法连接服务器，请先运行 start.bat';
+        } finally {
+          loginBtn.disabled = false;
+          loginBtn.textContent = '登 录';
+        }
+      }
+
+      loginBtn.addEventListener('click', doLogin);
+      passwordEl.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+      function resetRegisterForm() {
+        regVerified = false;
+        regVerifiedEmail = '';
+        document.getElementById('regStep2').classList.add('hidden');
+        document.getElementById('regError').textContent = '';
+        document.getElementById('regCodeHint').textContent = '';
+        setCodeStatus(document.getElementById('regVerifyStatus'), '', '');
+        clearCodeBoxes('regCodeBoxes');
+      }
+
+      const registerModal = document.getElementById('registerModal');
+      document.getElementById('registerLink').addEventListener('click', () => {
+        registerModal.classList.remove('hidden');
+        initCodeBoxes('regCodeBoxes');
+        resetRegisterForm();
+      });
+      document.getElementById('regCancel').addEventListener('click', () => registerModal.classList.add('hidden'));
+
+      document.getElementById('regEmail').addEventListener('input', () => {
+        if (regVerifiedEmail && document.getElementById('regEmail').value.trim() !== regVerifiedEmail) {
+          regVerified = false;
+          document.getElementById('regStep2').classList.add('hidden');
+          setCodeStatus(document.getElementById('regVerifyStatus'), '', '');
+        }
+      });
+
+      document.getElementById('regSendCode').addEventListener('click', async () => {
+        const email = document.getElementById('regEmail').value.trim();
+        const hintEl = document.getElementById('regCodeHint');
+        const errEl = document.getElementById('regError');
+        errEl.textContent = '';
+        setCodeStatus(document.getElementById('regVerifyStatus'), '', '');
+        if (!email) { errEl.textContent = '请先输入邮箱'; return; }
+        const btn = document.getElementById('regSendCode');
+        try {
+          const result = await sendEmailCode(email, 'register');
+          if (result.ok) {
+            hintEl.textContent = result.message + (result.devCode ? `（开发模式验证码：${result.devCode}）` : '');
+            clearInterval(regSendTimer);
+            regSendTimer = startCodeCountdown(btn, 60, '发送验证码');
+            regVerified = false;
+            document.getElementById('regStep2').classList.add('hidden');
+          } else {
+            errEl.textContent = result.error;
+          }
+        } catch (_) { errEl.textContent = '发送失败，请检查网络'; }
+      });
+
+      document.getElementById('regVerifyCode').addEventListener('click', async () => {
+        const email = document.getElementById('regEmail').value.trim();
+        const code = getCodeValue('regCodeBoxes');
+        const statusEl = document.getElementById('regVerifyStatus');
+        const errEl = document.getElementById('regError');
+        errEl.textContent = '';
+        if (!email) { errEl.textContent = '请先输入邮箱'; return; }
+        if (code.length !== 6) { setCodeStatus(statusEl, 'error', '请输入完整的6位验证码'); return; }
+        try {
+          const result = await verifyEmailCode(email, code, 'register');
+          if (result.ok) {
+            regVerified = true;
+            regVerifiedEmail = email;
+            setCodeStatus(statusEl, 'success', '✓ 验证码正确，请填写账号信息');
+            document.getElementById('regStep2').classList.remove('hidden');
+          } else {
+            regVerified = false;
+            document.getElementById('regStep2').classList.add('hidden');
+            setCodeStatus(statusEl, 'error', result.error || '验证码错误');
+          }
+        } catch (_) { setCodeStatus(statusEl, 'error', '验证失败，请检查网络'); }
+      });
+
+      document.getElementById('regConfirm').addEventListener('click', async () => {
+        const email = document.getElementById('regEmail').value.trim();
+        const code = getCodeValue('regCodeBoxes');
+        const id = document.getElementById('regId').value.trim();
+        const nickname = document.getElementById('regNickname').value.trim();
+        const pwd = document.getElementById('regPassword').value;
+        const pwd2 = document.getElementById('regPassword2').value;
+        const errEl = document.getElementById('regError');
+        if (!regVerified) { errEl.textContent = '请先验证邮箱验证码'; return; }
+        if (!id || !pwd) { errEl.textContent = '请填写完整信息'; return; }
+        if (pwd !== pwd2) { errEl.textContent = '两次密码不一致'; return; }
+        try {
+          const result = await registerUser({ id, password: pwd, nickname: nickname || id, email, code });
+          if (result.ok) {
+            registerModal.classList.add('hidden');
+            usernameEl.value = email;
+            passwordEl.value = pwd;
+            loginError.textContent = '注册成功，可使用邮箱登录';
+          } else errEl.textContent = result.error;
+        } catch (_) { errEl.textContent = '无法连接服务器'; }
+      });
+
+      const forgotModal = document.getElementById('forgotModal');
+      document.getElementById('forgotLink').addEventListener('click', () => {
+        forgotModal.classList.remove('hidden');
+        document.getElementById('forgotError').textContent = '';
+      });
+      document.getElementById('forgotCancel').addEventListener('click', () => forgotModal.classList.add('hidden'));
+      document.getElementById('forgotConfirm').addEventListener('click', async () => {
+        const id = document.getElementById('forgotId').value.trim();
+        const pwd = document.getElementById('forgotPassword').value;
+        const pwd2 = document.getElementById('forgotPassword2').value;
+        const errEl = document.getElementById('forgotError');
+        if (!id || !pwd) { errEl.textContent = '请填写完整信息'; return; }
+        if (pwd !== pwd2) { errEl.textContent = '两次密码不一致'; return; }
+        try {
+          const result = await resetPassword(id, pwd);
+          if (result.ok) {
+            forgotModal.classList.add('hidden');
+            usernameEl.value = id;
+            loginError.textContent = '密码已重置，请登录';
+          } else errEl.textContent = result.error;
+        } catch (_) { errEl.textContent = '无法连接服务器'; }
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>bbchat 管理后台</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body { background: #f0f2f5; }
+    .admin-wrap { max-width: 960px; margin: 0 auto; padding: 20px; }
+    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .admin-card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .stat-box { background: #f8fafc; border-radius: 10px; padding: 16px; text-align: center; }
+    .stat-num { font-size: 28px; font-weight: 700; color: #2563eb; }
+    .stat-label { font-size: 13px; color: #888; margin-top: 4px; }
+    .admin-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .admin-table th, .admin-table td { padding: 10px 8px; border-bottom: 1px solid #eee; text-align: left; }
+    .admin-table th { color: #888; font-weight: 500; }
+    .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab-btn { padding: 8px 16px; border: none; border-radius: 8px; background: #e5e7eb; cursor: pointer; }
+    .tab-btn.active { background: #2563eb; color: #fff; }
+    .admin-login { max-width: 360px; margin: 80px auto; }
+  </style>
+</head>
+<body>
+  <div id="loginPanel" class="admin-wrap admin-login">
+    <div class="admin-card">
+      <h1 class="login-title" style="margin-bottom:8px">bbchat 管理后台</h1>
+      <p class="login-subtitle">云端数据管理</p>
+      <input type="password" id="adminPassword" class="soft-input login-input" placeholder="管理员密码">
+      <button id="adminLoginBtn" class="login-btn pressable">登录</button>
+      <p id="adminLoginError" class="login-error"></p>
+    </div>
+  </div>
+
+  <div id="adminPanel" class="admin-wrap hidden">
+    <div class="admin-header">
+      <h1>bbchat 管理后台</h1>
+      <button id="adminLogoutBtn" class="modal-btn modal-btn-secondary pressable">退出</button>
+    </div>
+
+    <div class="admin-card">
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-box"><div class="stat-num" id="statUsers">-</div><div class="stat-label">用户数</div></div>
+        <div class="stat-box"><div class="stat-num" id="statConvs">-</div><div class="stat-label">会话数</div></div>
+        <div class="stat-box"><div class="stat-num" id="statMsgs">-</div><div class="stat-label">消息数</div></div>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="users">用户</button>
+      <button class="tab-btn" data-tab="conversations">会话</button>
+      <button class="tab-btn" data-tab="messages">消息</button>
+    </div>
+
+    <div class="admin-card" id="tabUsers">
+      <table class="admin-table">
+        <thead><tr><th>ID</th><th>昵称</th><th>邮箱</th><th>性别</th><th>操作</th></tr></thead>
+        <tbody id="usersBody"></tbody>
+      </table>
+    </div>
+    <div class="admin-card hidden" id="tabConversations">
+      <table class="admin-table">
+        <thead><tr><th>ID</th><th>类型</th><th>名称</th><th>最后消息</th><th>时间</th></tr></thead>
+        <tbody id="convsBody"></tbody>
+      </table>
+    </div>
+    <div class="admin-card hidden" id="tabMessages">
+      <table class="admin-table">
+        <thead><tr><th>会话</th><th>发送者</th><th>内容</th><th>操作</th></tr></thead>
+        <tbody id="msgsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
