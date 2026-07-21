@@ -9,9 +9,26 @@ const { adminLogin, verifyAdmin } = require('../lib/adminAuth');
 const { getSupabase } = require('../lib/supabase');
 
 function pathParts(req) {
-  const p = req.query.path;
-  if (!p) return [];
-  return Array.isArray(p) ? p : [p];
+  // vercel.json rewrite: /api/(.*) -> /api/handler?path=$1
+  let p = req.query && req.query.path;
+  if (Array.isArray(p)) p = p.join('/');
+  if (typeof p === 'string' && p.length) {
+    return p.split('/').filter(Boolean).map((s) => {
+      try { return decodeURIComponent(s); } catch (_) { return s; }
+    });
+  }
+
+  // Fallback: parse from URL
+  const rawUrl = req.url || '';
+  const pathname = rawUrl.split('?')[0] || '';
+  const stripped = pathname
+    .replace(/^\/api\/handler\/?/, '')
+    .replace(/^\/api\/?/, '')
+    .replace(/^\//, '');
+  if (!stripped || stripped === 'handler') return [];
+  return stripped.split('/').filter(Boolean).map((s) => {
+    try { return decodeURIComponent(s); } catch (_) { return s; }
+  });
 }
 
 function joinPath(parts) {
